@@ -37,9 +37,12 @@ if ((secretUploadRoute && !secretReceiveRoute) || (!secretUploadRoute && secretR
   throw new Error('SECRET_UPLOAD_ROUTE and SECRET_RECEIVE_ROUTE must be configured together')
 }
 const secretUploadUsername = process.env.SECRET_UPLOAD_USERNAME || 'send2ereader'
-const secretUploadPassword = process.env.SECRET_UPLOAD_PASSWORD || null
-if (secretUploadRoute && !secretUploadPassword) {
-  throw new Error('SECRET_UPLOAD_PASSWORD must be configured when SECRET_UPLOAD_ROUTE is enabled')
+const secretUploadPasswordHash = process.env.SECRET_UPLOAD_PASSWORD_HASH || null
+if (secretUploadRoute && process.env.SECRET_UPLOAD_PASSWORD) {
+  throw new Error('SECRET_UPLOAD_PASSWORD stores plaintext and is no longer supported; configure SECRET_UPLOAD_PASSWORD_HASH instead')
+}
+if (secretUploadRoute && !secretUploadPasswordHash) {
+  throw new Error('SECRET_UPLOAD_PASSWORD_HASH must be configured when SECRET_UPLOAD_ROUTE is enabled')
 }
 
 const TYPE_EPUB = 'application/epub+zip'
@@ -158,6 +161,35 @@ function timingSafeEqualString (left, right) {
   return crypto.timingSafeEqual(leftBuffer, rightBuffer)
 }
 
+function verifyPasswordHash (password, encodedHash) {
+  if (!encodedHash) return false
+
+  const parts = encodedHash.split(':')
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return false
+
+  const cost = Number.parseInt(parts[1], 10)
+  const blockSize = Number.parseInt(parts[2], 10)
+  const parallelization = Number.parseInt(parts[3], 10)
+  const salt = Buffer.from(parts[4], 'base64')
+  const expected = Buffer.from(parts[5], 'base64')
+
+  if (!Number.isFinite(cost) || !Number.isFinite(blockSize) || !Number.isFinite(parallelization)) return false
+  if (cost <= 1 || blockSize <= 0 || parallelization <= 0 || salt.length < 16 || expected.length < 32) return false
+
+  let actual = null
+  try {
+    actual = crypto.scryptSync(password, salt, expected.length, {
+      N: cost,
+      r: blockSize,
+      p: parallelization
+    })
+  } catch (err) {
+    return false
+  }
+
+  return crypto.timingSafeEqual(actual, expected)
+}
+
 function unauthorizedSecretUpload (ctx) {
   ctx.response.status = 401
   ctx.set('WWW-Authenticate', 'Basic realm="send2ereader secret upload", charset="UTF-8"')
@@ -165,7 +197,7 @@ function unauthorizedSecretUpload (ctx) {
 }
 
 function requireSecretUploadAuth (ctx) {
-  if (!secretUploadPassword) return true
+  if (!secretUploadPasswordHash) return true
   if (!rateLimit(ctx, 'secret-upload-auth', secretAuthRateLimit)) return false
 
   const header = ctx.get('authorization')
@@ -190,7 +222,7 @@ function requireSecretUploadAuth (ctx) {
 
   const username = decoded.slice(0, splitAt)
   const password = decoded.slice(splitAt + 1)
-  if (!timingSafeEqualString(username, secretUploadUsername) || !timingSafeEqualString(password, secretUploadPassword)) {
+  if (!timingSafeEqualString(username, secretUploadUsername) || !verifyPasswordHash(password, secretUploadPasswordHash)) {
     unauthorizedSecretUpload(ctx)
     return false
   }

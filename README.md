@@ -33,3 +33,15 @@ The compose file uses `ghcr.io/tlamart/send2ereader:latest` by default. To deplo
 ```
 SEND2EREADER_IMAGE=ghcr.io/tlamart/send2ereader:<tag> docker compose up -d
 ```
+
+### Secret Upload Password
+
+Secret upload Basic Auth uses `SECRET_UPLOAD_PASSWORD_HASH`; do not put the plaintext password in `.env`.
+
+Generate a password hash with Node.js:
+
+```
+node -e "const crypto=require('crypto'); const password=process.argv[1]; const N=16384,r=8,p=1; const salt=crypto.randomBytes(16); const hash=crypto.scryptSync(password,salt,64,{N,r,p}); console.log(['scrypt',N,r,p,salt.toString('base64'),hash.toString('base64')].join(':'))" "your-long-random-password"
+```
+
+Use the generated value as `SECRET_UPLOAD_PASSWORD_HASH` and keep using the plaintext password only when logging in through the browser.
