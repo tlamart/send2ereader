@@ -10,9 +10,7 @@ const serve = require('koa-static')
 const { mkdirp } = require('mkdirp')
 const fs = require('fs')
 const { spawn } = require('child_process')
-const { join, extname, basename, dirname } = require('path')
-const resolvepath = require('path').resolve
-const FileType = require('file-type')
+const { extname, basename, dirname } = require('path')
 const { transliterate } = require('transliteration')
 const sanitize = require('sanitize-filename')
 
@@ -46,6 +44,11 @@ function randomKey () {
   return rnd.toString(keyChars.length).padStart(keyLength, '0').split('').map((chr) => {
     return keyChars[parseInt(chr, keyChars.length)]
   }).join('')
+}
+
+async function detectFileType (filepath) {
+  const { fileTypeFromFile } = await import('file-type')
+  return fileTypeFromFile(filepath)
 }
 
 function removeKey (key) {
@@ -282,7 +285,7 @@ router.post('/upload', async (ctx, next) => {
 
     let mimetype = ctx.request.file.mimetype
 
-    const type = await FileType.fromFile(ctx.request.file.path)
+    const type = await detectFileType(ctx.request.file.path)
 
     if (mimetype == "application/octet-stream" && type) {
       mimetype = type.mime
@@ -419,54 +422,6 @@ router.post('/upload', async (ctx, next) => {
         flash(ctx, {
           success: false,
           message: err.replaceAll(basename(ctx.request.file.path), "infile.epub").replaceAll(basename(outname), "outfile.kepub.epub")
-        })
-        return
-      }
-
-    } else if (mimetype == 'application/pdf' && ctx.request.body.pdfcropmargins) {
-      const dir = dirname(ctx.request.file.path)
-      const base = basename(ctx.request.file.path, '.pdf')
-      const outfile = resolvepath(join(dir, `${base}_cropped.pdf`))
-      let p = new Promise((resolve, reject) => {
-        let stderr = ''
-        const pdfcropmargins = spawn('pdfcropmargins', ['-s', '-u', '-o', outfile, basename(ctx.request.file.path)], {
-          // stdio: 'inherit',
-          cwd: dirname(ctx.request.file.path)
-        })
-        pdfcropmargins.once('error', function (err) {
-          fs.unlink(ctx.request.file.path, (err) => {
-            if (err) console.error(err)
-            else console.log('Removed file', ctx.request.file.path)
-          })
-          reject('pdfcropmargins error: ' + err)
-        })
-        pdfcropmargins.once('close', (code) => {
-          fs.unlink(ctx.request.file.path, (err) => {
-            if (err) console.error(err)
-            else console.log('Removed file', ctx.request.file.path)
-          })
-          if (code !== 0) {
-            reject('pdfcropmargins error code: ' + code + '\n' + stderr)
-            return
-          }
-
-          resolve(outfile)
-        })
-        pdfcropmargins.stdout.on('data', function (str) {
-          stderr += str
-          console.log('pdfcropmargins: ' + str)
-        })
-        pdfcropmargins.stderr.on('data', function (str) {
-          stderr += str
-          console.log('pdfcropmargins: ' + str)
-        })
-      })
-      try {
-        data = await p
-      } catch (err) {
-        flash(ctx, {
-          success: false,
-          message: err.replaceAll(basename(ctx.request.file.path), "infile.pdf").replaceAll(outfile, "outfile.pdf")
         })
         return
       }
