@@ -296,6 +296,27 @@ function expireKey (key) {
   return timer
 }
 
+function ensureSecretInfo (ctx) {
+  let info = ctx.keys.get(secretKey)
+  if (info) return info
+
+  info = {
+    created: new Date(),
+    agent: null,
+    expireDelay: secretExpireDelay,
+    maxExpireDuration: secretMaxExpireDuration,
+    file: null,
+    files: [],
+    urls: []
+  }
+  ctx.keys.set(secretKey, info)
+  expireKey(secretKey)
+  info.maxTimer = setTimeout(() => {
+    if(ctx.keys.get(secretKey) === info) removeKey(secretKey)
+  }, info.maxExpireDuration * 1000)
+  return info
+}
+
 function flash (ctx, data) {
   console.log('Response:', {
     success: data.success,
@@ -388,7 +409,7 @@ async function generateKey (ctx, options = {}) {
 
   const currentInfo = ctx.keys.get(key)
   if (currentInfo) {
-    if (options.key === secretKey && currentInfo.agent !== agent && (currentInfo.files || []).length > 0) {
+    if (options.key === secretKey && currentInfo.agent && currentInfo.agent !== agent && (currentInfo.files || []).length > 0) {
       ctx.response.status = 409
       ctx.body = 'Secret receiver is already connected'
       return
@@ -848,6 +869,7 @@ router.post('/upload', async (ctx, next) => {
 if (secretUploadRoute) {
   router.post(secretUploadRoute + '/upload', async (ctx, next) => {
     if (!requireSecretUploadAuth(ctx)) return
+    ensureSecretInfo(ctx)
     await uploadFile(ctx, next, {
       key: secretKey,
       multiple: true
