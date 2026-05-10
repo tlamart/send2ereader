@@ -13,7 +13,7 @@
 	<h1 class="center">Send to Kobo/Kindle</h1>
 	<form action="./upload" method="post" enctype="multipart/form-data" id="uploadform">
 		<table style="margin: 0 auto;" cellpadding=0 cellspacing=0>
-			<tr><td class="right"><label for="keyinput"><strong>Unique key</strong></label></td><td><input type="text" name="key" id="keyinput" autocomplete="off" pattern="...." placeholder="––––" required style="text-transform: uppercase;" maxlength=4/></td></tr>
+			<tr id="keyrow"><td class="right"><label for="keyinput"><strong>Unique key</strong></label></td><td><input type="text" name="key" id="keyinput" autocomplete="off" pattern="...." placeholder="––––" required style="text-transform: uppercase;" maxlength=4/></td></tr>
 			<tr><td class="right aligntop"><label for="fileinput"><strong>Ebook file</strong></label><br/><em>EPUB, MOBI, PDF,<br/>TXT, CBZ, CBR</em></td><td class="aligntop"><label for="fileinput" id="choosebtn">Choose file</label><input type="file" name="file" id="fileinput" accept=".txt,.epub,.mobi,.pdf,.cbz,.cbr,application/epub+zip,application/epub,application/x-mobipocket-ebook,application/pdf,application/vnd.comicbook+zip,application/vnd.comicbook-rar"/><br/><br/><div id="fileinfo"></div></td></tr>
 			<tr><td class="right"><label for="urlinput"><strong>Send url</strong></label></td><td><input type="url" name="url" id="urlinput" autocomplete="off" style="width: 100%"></td></tr>
 			<tr><td class="right"><input type="checkbox" name="kepubify" id="kepubify" checked /></td><td><label for="kepubify"><strong>Kepubify</strong> <em>Kobo only</em></label></td></tr>
@@ -42,6 +42,7 @@
 <script>
 var uploadform = document.getElementById('uploadform')
 var uploadstatus = document.getElementById('uploadstatus')
+var keyrow = document.getElementById('keyrow')
 var keyinput = document.getElementById('keyinput')
 var fileinput = document.getElementById('fileinput')
 var fileinputAccept = fileinput.accept.split(',') // cache it
@@ -50,6 +51,18 @@ var urlinput = document.getElementById('urlinput')
 var siteurl = document.getElementById('siteurl')
 
 var flashtimer = null
+var pagePath = window.location.pathname.replace(/\/+$/, '')
+var secretMode = pagePath !== '' && pagePath !== '/upload.html'
+uploadstatus.style.whiteSpace = 'pre-line'
+fileinfo.style.whiteSpace = 'pre-line'
+
+if (secretMode) {
+	keyrow.style.display = 'none'
+	keyinput.required = false
+	keyinput.disabled = true
+	fileinput.multiple = true
+	uploadform.action = pagePath + '/upload'
+}
 
 function hideUploadStatus() {
 	uploadstatus.style.opacity = 0
@@ -68,7 +81,7 @@ function handleFlash(flash) {
 		if (flash.message) {
 			if (flash.success) {
 				uploadstatus.className = " success"
-				uploadstatus.innerHTML = flash.message.trim()
+				uploadstatus.textContent = flash.message.trim()
 			} else {
 				uploadstatus.className = " error"
 				uploadstatus.textContent = flash.message.trim()
@@ -100,29 +113,41 @@ function fileinputChange () {
 		return
 	}
 
-	var filename = fileinput.files[0].name
-	var type = fileinput.files[0].type
-	var found = false
-	for (var i = 0; i < fileinputAccept.length; i++) {
-		var item = fileinputAccept[i]
-		if (item.length > 1 && item[0] == '.') {
-			if (filename.toLowerCase().endsWith(item.toLowerCase())) {
-				found = true
-				break
-			}
-		} else if (type == item) {
-			found = true
-			break
-		}
-	}
-	if (!found) {
-		alert("Invalid file: " + filename + "\nPlease select another file.")
+	if (secretMode && fileinput.files.length > 5) {
+		alert("Please select up to 5 files.")
 		fileinfo.textContent = ''
 		fileinput.value = ''
 		return
 	}
 
-	fileinfo.innerHTML = filename + "<br/>Filesize: " + Math.ceil(fileinput.files[0].size / 1024) + ' kB'
+	var filelines = []
+	for (var fileIndex = 0; fileIndex < fileinput.files.length; fileIndex++) {
+		var file = fileinput.files[fileIndex]
+		var filename = file.name
+		var type = file.type
+		var found = false
+		for (var i = 0; i < fileinputAccept.length; i++) {
+			var item = fileinputAccept[i]
+			if (item.length > 1 && item[0] == '.') {
+				if (filename.toLowerCase().endsWith(item.toLowerCase())) {
+					found = true
+					break
+				}
+			} else if (type == item) {
+				found = true
+				break
+			}
+		}
+		if (!found) {
+			alert("Invalid file: " + filename + "\nPlease select another file.")
+			fileinfo.textContent = ''
+			fileinput.value = ''
+			return
+		}
+		filelines.push(filename + "\nFilesize: " + Math.ceil(file.size / 1024) + ' kB')
+	}
+
+	fileinfo.textContent = filelines.join('\n\n')
 }
 
 fileinput.addEventListener('change', fileinputChange, false)
@@ -163,7 +188,7 @@ uploadform.addEventListener('submit', function (e) {
 		console.log('upload error', req.status, req.responseText, req.responseType)
 		handleFlash({
 			success: false,
-			message: "Upload error - is the key correct?"
+			message: secretMode ? "Upload error - is the secret receiver open?" : "Upload error - is the key correct?"
 		})
 	}
 	req.onabort = function () {
@@ -177,7 +202,7 @@ uploadform.addEventListener('submit', function (e) {
 	return false
 }, false)
 
-siteurl.textContent = window.location.href
+siteurl.textContent = secretMode ? window.location.origin : window.location.href
 siteurl.href = siteurl.textContent
 siteurl.target = '_self'
 

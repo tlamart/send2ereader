@@ -12,7 +12,7 @@
 <div class="wrapper">
 	<h1 class="center">Send to Kobo/Kindle</h1>
 
-	<div class="center">
+	<div class="center" id="keypanel">
 		<div style="font-size: 1.3em;">Unique key:</div>
 		<div id="key">
 			<span id="keyoutput">––––</span>
@@ -29,6 +29,7 @@
 			<br/>
 			<div style="font-size: 1.3em;"><em>Downloads</em></div>
 			<a id="downloadlink" class="downloadlink"></a>
+			<div id="downloadlinks"></div>
 		</div>
 		<div id="urls"></div>
 		<br/>
@@ -49,12 +50,23 @@
 
 var keyOutput = document.getElementById('keyoutput')
 var keyGenBtn = document.getElementById('keygen')
+var keyPanel = document.getElementById('keypanel')
 var downloads = document.getElementById('downloads')
 var downloadlink = document.getElementById('downloadlink')
+var downloadlinks = document.getElementById('downloadlinks')
 var urlsnode = document.getElementById('urls')
 var siteurl = document.getElementById('siteurl')
 var key = null
 var pollTimer = null
+var pagePath = window.location.pathname.replace(/\/+$/, '')
+var secretMode = pagePath !== '' && pagePath !== '/receive' && pagePath !== '/download.html'
+
+function currentPageEndpoint (endpoint) {
+	if (secretMode) {
+		return pagePath + endpoint
+	}
+	return '.' + endpoint
+}
 
 function pollFile () {
 	if (!key) {
@@ -62,7 +74,7 @@ function pollFile () {
 		downloads.style.display = 'none'
 		return
 	}
-	xhr('GET', './status/' + key, function (x) {
+	xhr('GET', secretMode ? currentPageEndpoint('/status') : './status/' + key, function (x) {
 		var data
 		try {
 			data = JSON.parse(x.responseText)
@@ -79,12 +91,26 @@ function pollFile () {
 			downloads.style.display = 'none'
 		}
 		var urls = data.urls && data.urls.length > 0 ? data.urls : null
-		if (data.file) {
+		var files = data.files && data.files.length > 0 ? data.files : (data.file ? [data.file] : null)
+		if (files) {
 			downloads.style.display = 'block'
-			downloadlink.textContent = data.file.name
-			downloadlink.href = '/' + encodeURIComponent(data.file.name) + "?key=" + key
+			downloadlink.style.display = files.length === 1 ? '' : 'none'
+			downloadlinks.textContent = ''
+			files.forEach(function (file) {
+				var link = files.length === 1 ? downloadlink : document.createElement('a')
+				link.textContent = file.name
+				link.href = secretMode ? pagePath + '/' + encodeURIComponent(file.name) : '/' + encodeURIComponent(file.name) + "?key=" + key
+				link.className = "downloadlink"
+				if (files.length > 1) {
+					var div = document.createElement('div')
+					div.appendChild(link)
+					downloadlinks.appendChild(div)
+				}
+			})
 		} else {
 			downloads.style.display = 'none'
+			downloadlink.textContent = ''
+			downloadlinks.textContent = ''
 		}
 		if (urls) {
 			urlsnode.innerHTML = '<br/><div style="font-size: 1.3em;"><em>Urls</em></div>'
@@ -92,6 +118,7 @@ function pollFile () {
 				var urllink = document.createElement("a")
 				urllink.href = url
 				urllink.target = '_blank'
+				urllink.rel = 'noopener noreferrer'
 				urllink.textContent = url
 				urllink.className = "downloadlink"
 				var div = document.createElement('div')
@@ -106,11 +133,12 @@ function generateKey () {
 	keyOutput.textContent = '––––'
 	if (pollTimer) clearInterval(pollTimer)
 	downloads.style.display = 'none'
-	xhr('POST', './generate', function (x) {
+	xhr('POST', currentPageEndpoint('/generate'), function (x) {
 		if (x.responseText !== 'error' && x.status === 200) {
-			key = x.responseText
+			key = secretMode ? 'secret' : x.responseText
 			keyOutput.textContent = key
 			downloadlink.href = ''
+			downloadlinks.textContent = ''
 			if (pollTimer) clearInterval(pollTimer)
 			pollTimer = setInterval(pollFile, 5 * 1000)
 		} else {
@@ -124,10 +152,13 @@ function generateKey () {
 
 window.onload = function () {
 	keyGenBtn.onclick = generateKey
+	if (secretMode) {
+		keyPanel.style.display = 'none'
+	}
 	generateKey()
 }
 
-siteurl.textContent = window.location.href
+siteurl.textContent = secretMode ? window.location.origin : window.location.href
 siteurl.href = siteurl.textContent
 siteurl.target = '_self'
 
