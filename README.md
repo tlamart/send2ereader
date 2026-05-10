@@ -15,16 +15,22 @@ A self hostable service for sending ebooks to a Kobo or Kindle ereader through t
 
 ### Containerized
 1. You need [Docker](https://www.docker.com/) and [docker-compose](https://docs.docker.com/compose/) installed
-2. Clone this repo (you need Dockerfile, docker-compose.yaml and package.json in the same directory)
+2. Clone this repo or copy `docker-compose.yaml` to your server
 ```
-git clone https://github.com/daniel-j/send2ereader.git
+git clone https://github.com/tlamart/send2ereader.git
 ```
-3. Build the image
+3. Pull the prebuilt image
 ```
-docker compose build
+docker compose pull
 ```
-4. run container (-d to keep running in the background)
+4. Run container (-d to keep running in the background)
 ```
 docker compose up -d
 ```
 5. Access the service on HTTP, default port 3001 (http://localhost:3001)
+
+The compose file uses `ghcr.io/tlamart/send2ereader:latest` by default. To deploy a different tag or registry image, set `SEND2EREADER_IMAGE` before running Compose:
+
+```
+SEND2EREADER_IMAGE=ghcr.io/tlamart/send2ereader:<tag> docker compose up -d
+```

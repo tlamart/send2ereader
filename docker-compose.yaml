@@ -1,8 +1,6 @@
 services:
   send2ereader:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+    image: ${SEND2EREADER_IMAGE:-ghcr.io/tlamart/send2ereader:latest}
     container_name: send2ereader
     # Restart means, Automatic re-start the container after a shutdown unless manual stop container
     restart: unless-stopped
