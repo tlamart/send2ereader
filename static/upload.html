@@ -21,7 +21,9 @@
 			<tr><td class="right"><input type="checkbox" name="kindlegen" id="kindlegen" checked /></td><td><label for="kindlegen"><strong>KindleGen</strong> <em>Kindle only</em></label></td></tr>
 			<tr><td class="right"><input type="checkbox" name="transliteration" id="transliteration" /></td><td><label for="transliteration"><strong>Transliteration of filename</strong></label></td></tr>
 			<tr class="center"><td colspan="2"><input type="submit" value="Upload and send" /></td></tr>
+			<tr id="clearrow" class="center" style="display: none;"><td colspan="2"><button type="button" id="clearfiles">Remove stored files</button></td></tr>
 		</table>
+		<div id="storedfiles"></div>
 		<div id="uploadstatus"></div>
 	</form>
 	<div style="padding: 15px; padding-top: 0; text-align: justify;">
@@ -49,6 +51,9 @@ var fileinput = document.getElementById('fileinput')
 var fileinputAccept = fileinput.accept.split(',') // cache it
 var fileinfo = document.getElementById('fileinfo')
 var urlinput = document.getElementById('urlinput')
+var clearrow = document.getElementById('clearrow')
+var clearfiles = document.getElementById('clearfiles')
+var storedfiles = document.getElementById('storedfiles')
 var siteurl = document.getElementById('siteurl')
 
 var flashtimer = null
@@ -63,6 +68,8 @@ if (secretMode) {
 	keyinput.disabled = true
 	fileinput.multiple = true
 	uploadform.action = pagePath + '/upload'
+	clearrow.style.display = ''
+	refreshStoredFiles()
 }
 
 function hideUploadStatus() {
@@ -98,6 +105,76 @@ function handleFlash(flash) {
 	} else {
 		hideUploadStatus()
 	}
+}
+
+function renderStoredFiles(files) {
+	storedfiles.textContent = ''
+	if (!secretMode || !files || files.length === 0) return
+
+	var title = document.createElement('div')
+	title.innerHTML = '<strong>Stored files</strong>'
+	storedfiles.appendChild(title)
+
+	files.forEach(function (file) {
+		var row = document.createElement('div')
+		row.className = 'storedfile'
+
+		var name = document.createElement('span')
+		name.textContent = file.name
+		row.appendChild(name)
+
+		var remove = document.createElement('button')
+		remove.type = 'button'
+		remove.textContent = 'Remove'
+		remove.onclick = function () {
+			removeStoredFile(file.name)
+		}
+		row.appendChild(remove)
+
+		storedfiles.appendChild(row)
+	})
+}
+
+function refreshStoredFiles() {
+	if (!secretMode) return
+	var req = new XMLHttpRequest()
+	req.open('GET', pagePath + '/files', true)
+	req.onload = function () {
+		if (req.status !== 200) {
+			renderStoredFiles([])
+			return
+		}
+		try {
+			renderStoredFiles(JSON.parse(req.responseText).files)
+		} catch (err) {
+			renderStoredFiles([])
+		}
+	}
+	req.onerror = function () {
+		renderStoredFiles([])
+	}
+	req.send()
+}
+
+function removeStoredFile(filename) {
+	if (!secretMode || !confirm('Remove ' + filename + '?')) return
+	hideUploadStatus()
+	var req = new XMLHttpRequest()
+	req.open('DELETE', pagePath + '/files/' + encodeURIComponent(filename), true)
+	req.onload = function () {
+		handleFlash({
+			success: req.status == 200,
+			message: req.responseText
+		})
+		refreshStoredFiles()
+	}
+	req.onerror = function () {
+		handleFlash({
+			success: false,
+			message: "Remove error - please try again"
+		})
+	}
+	req.send()
 }
 
 // handleFlash()
@@ -184,6 +261,7 @@ uploadform.addEventListener('submit', function (e) {
 			success: req.status == 200,
 			message: req.responseText
 		})
+		refreshStoredFiles()
 	}
 	req.onerror = function () {
 		console.log('upload error', req.status, req.responseText, req.responseType)
@@ -201,6 +279,27 @@ uploadform.addEventListener('submit', function (e) {
 	}
 	req.send(fd)
 	return false
+}, false)
+
+clearfiles.addEventListener('click', function () {
+	if (!secretMode || !confirm('Remove all stored files?')) return
+	hideUploadStatus()
+	var req = new XMLHttpRequest()
+	req.open('DELETE', pagePath + '/files', true)
+	req.onload = function () {
+		handleFlash({
+			success: req.status == 200,
+			message: req.responseText
+		})
+		refreshStoredFiles()
+	}
+	req.onerror = function () {
+		handleFlash({
+			success: false,
+			message: "Remove error - please try again"
+		})
+	}
+	req.send()
 }, false)
 
 siteurl.textContent = secretMode ? window.location.origin : window.location.href

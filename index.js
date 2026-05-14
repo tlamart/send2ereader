@@ -920,6 +920,56 @@ if (secretUploadRoute) {
       multiple: true
     })
   })
+
+  router.delete(secretUploadRoute + '/files', async ctx => {
+    if (!requireSecretUploadAuth(ctx)) return
+    const info = ctx.keys.get(secretKey)
+    if (!info) {
+      ctx.response.status = 404
+      ctx.body = 'No secret receiver is connected'
+      return
+    }
+    removeFiles(info.files || (info.file ? [info.file] : []), {
+      tracked: true
+    })
+    info.file = null
+    info.files = []
+    ctx.body = 'Stored files removed'
+  })
+
+  router.get(secretUploadRoute + '/files', async ctx => {
+    if (!requireSecretUploadAuth(ctx)) return
+    const info = ctx.keys.get(secretKey)
+    const files = info && info.files && info.files.length > 0 ? info.files : (info && info.file ? [info.file] : [])
+    ctx.body = {
+      files: files.map((file) => {
+        return {
+          name: file.name
+        }
+      })
+    }
+  })
+
+  router.delete(secretUploadRoute + '/files/:filename', async ctx => {
+    if (!requireSecretUploadAuth(ctx)) return
+    const filename = decodeURIComponent(ctx.params.filename)
+    const info = ctx.keys.get(secretKey)
+    const files = info && info.files && info.files.length > 0 ? info.files : (info && info.file ? [info.file] : [])
+    const file = files.find((item) => item.name === filename)
+
+    if (!info || !file) {
+      ctx.response.status = 404
+      ctx.body = 'Stored file not found'
+      return
+    }
+
+    removeFiles([file], {
+      tracked: true
+    })
+    info.files = files.filter((item) => item.name !== filename)
+    info.file = info.files[0] || null
+    ctx.body = 'Stored file removed: ' + filename
+  })
 }
 
 router.delete('/file/:key', async ctx => {

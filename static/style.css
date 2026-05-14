@@ -30,7 +30,7 @@ h1 {
 .right {
     text-align: right;
 }
-#keygen, .downloadlink, #choosebtn, input[type="submit"] {
+#keygen, .downloadlink, #choosebtn, input[type="submit"], button {
     background: #CCC;
     border: none;
     color: black;
@@ -50,8 +50,8 @@ h1 {
     margin-right: -2em;
     padding: 1em;
 }
-#keygen:focus, #downloadlink:focus, #choosebtn:focus, input[type="submit"]:focus,
-#keygen:active, #downloadlink:active, #choosebtn:active, input[type="submit"]:active {
+#keygen:focus, #downloadlink:focus, #choosebtn:focus, input[type="submit"]:focus, button:focus,
+#keygen:active, #downloadlink:active, #choosebtn:active, input[type="submit"]:active, button:active {
     background: black;
     color: white;
 }
@@ -62,6 +62,15 @@ h1 {
 }
 .downloadlink {
     margin: 0.5em;
+}
+.downloadlink.downloaded {
+    border: 1px solid black;
+    text-decoration: line-through;
+}
+.downloadlink.downloaded::after {
+    content: " downloaded";
+    font-size: 0.8em;
+    font-style: normal;
 }
 #downloads {
     display: none;
@@ -122,4 +131,28 @@ td.aligntop {
     font-size: 0.9em;
     font-style: italic;
     width: 18em;
+}
+
+#storedfiles {
+    margin: 10px auto 0;
+    max-width: 30em;
+    text-align: left;
+}
+
+.storedfile {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+}
+
+.storedfile span {
+    overflow-wrap: anywhere;
+}
+
+.storedfile button {
+    flex: 0 0 auto;
+    font-size: 1em;
+    padding: 0.3em 0.8em;
 }

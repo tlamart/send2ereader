@@ -60,6 +60,44 @@ var key = null
 var pollTimer = null
 var pagePath = window.location.pathname.replace(/\/+$/, '')
 var secretMode = pagePath !== '' && pagePath !== '/receive' && pagePath !== '/download.html'
+var downloadedFiles = {}
+
+function downloadedStorageKey () {
+	return 'downloaded:' + pagePath + ':' + (key || '')
+}
+
+function loadDownloadedFiles () {
+	downloadedFiles = {}
+	try {
+		var stored = window.sessionStorage.getItem(downloadedStorageKey())
+		if (stored) downloadedFiles = JSON.parse(stored)
+	} catch (err) {}
+}
+
+function saveDownloadedFiles () {
+	try {
+		window.sessionStorage.setItem(downloadedStorageKey(), JSON.stringify(downloadedFiles))
+	} catch (err) {}
+}
+
+function markDownloaded (filename) {
+	downloadedFiles[filename] = true
+	saveDownloadedFiles()
+}
+
+function applyDownloadedHint (link, filename) {
+	if (downloadedFiles[filename]) {
+		link.className = "downloadlink downloaded"
+		link.title = "Already downloaded"
+	} else {
+		link.className = "downloadlink"
+		link.title = ""
+	}
+	link.onclick = function () {
+		markDownloaded(filename)
+		applyDownloadedHint(link, filename)
+	}
+}
 
 function currentPageEndpoint (endpoint) {
 	if (secretMode) {
@@ -100,7 +138,7 @@ function pollFile () {
 				var link = files.length === 1 ? downloadlink : document.createElement('a')
 				link.textContent = file.name
 				link.href = secretMode ? pagePath + '/' + encodeURIComponent(file.name) : '/' + encodeURIComponent(file.name) + "?key=" + key
-				link.className = "downloadlink"
+				applyDownloadedHint(link, file.name)
 				if (files.length > 1) {
 					var div = document.createElement('div')
 					div.appendChild(link)
@@ -136,6 +174,7 @@ function generateKey () {
 	xhr('POST', currentPageEndpoint('/generate'), function (x) {
 		if (x.responseText !== 'error' && x.status === 200) {
 			key = secretMode ? 'secret' : x.responseText
+			loadDownloadedFiles()
 			keyOutput.textContent = key
 			downloadlink.href = ''
 			downloadlinks.textContent = ''
