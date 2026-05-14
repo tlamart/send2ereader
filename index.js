@@ -269,6 +269,18 @@ async function detectFileType (filepath) {
   return fileTypeFromFile(filepath)
 }
 
+function selectedUploadDevice (ctx, info) {
+  const requestedDevice = (ctx.request.body.device || 'auto').toLowerCase()
+  if (requestedDevice === 'kobo') return 'Kobo'
+  if (requestedDevice === 'kindle') return 'Kindle'
+  if (requestedDevice === 'other') return null
+
+  const agent = info.agent || ''
+  if (agent.includes('Kobo')) return 'Kobo'
+  if (agent.includes('Kindle')) return 'Kindle'
+  return null
+}
+
 function removeKey (key) {
   console.log('Removing expired key', key)
   const info = app.context.keys.get(key)
@@ -542,7 +554,7 @@ async function downloadFile (ctx, next, options = {}) {
   await sendfile(ctx, file.path)
 }
 
-async function processUploadedFile (ctx, info, uploadedFile) {
+async function processUploadedFile (ctx, info, uploadedFile, device) {
   if (uploadedFile.size === 0) {
     throw {
       message: 'Invalid file submitted (empty file)',
@@ -575,11 +587,11 @@ async function processUploadedFile (ctx, info, uploadedFile) {
   if (ctx.request.body.transliteration) {
     filename = sanitize(doTransliterate(filename))
   }
-  if (info.agent.includes('Kindle')) {
+  if (device === 'Kindle') {
     filename = filename.replace(/[^\.\w\-"'\(\)]/g, '_')
   }
 
-  if (mimetype === TYPE_EPUB && info.agent.includes('Kindle') && ctx.request.body.kindlegen) {
+  if (mimetype === TYPE_EPUB && device === 'Kindle' && ctx.request.body.kindlegen) {
     // convert to .mobi
     conversion = 'kindlegen'
     const outname = uploadedFile.path.replace(/\.epub$/i, '.mobi')
@@ -641,7 +653,7 @@ async function processUploadedFile (ctx, info, uploadedFile) {
       }
     }
 
-  } else if (mimetype === TYPE_EPUB && info.agent.includes('Kobo') && ctx.request.body.kepubify) {
+  } else if (mimetype === TYPE_EPUB && device === 'Kobo' && ctx.request.body.kepubify) {
     // convert to Kobo EPUB
     conversion = 'kepubify'
     const outname = uploadedFile.path.replace(/\.epub$/i, '.kepub.epub')
@@ -789,6 +801,7 @@ async function uploadFile (ctx, next, options = {}) {
 
   const uploadedFiles = options.multiple ? (ctx.request.files || []) : (ctx.request.file ? [ctx.request.file] : [])
   const processedFiles = []
+  const device = selectedUploadDevice(ctx, info)
 
   if (options.multiple) {
     const currentFiles = info.files || (info.file ? [info.file] : [])
@@ -808,7 +821,7 @@ async function uploadFile (ctx, next, options = {}) {
 
   for (const uploadedFile of uploadedFiles) {
     try {
-      const processedFile = await processUploadedFile(ctx, info, uploadedFile)
+      const processedFile = await processUploadedFile(ctx, info, uploadedFile, device)
       processedFile.name = uniqueFilename(processedFile.name, (options.multiple ? (info.files || []) : []).concat(processedFiles))
       processedFiles.push(processedFile)
     } catch (err) {
@@ -865,7 +878,7 @@ async function uploadFile (ctx, next, options = {}) {
     uploadedFiles.forEach((file) => {
       file.skip = true
     })
-    messages.push('Upload successful! ' + (processedFiles.length > 1 ? processedFiles.length + ' files were sent' : (processedFiles[0].conversion ? 'Ebook was converted with ' + processedFiles[0].conversion + ' and sent' : 'Sent'))+' to '+(info.agent.includes('Kobo') ? 'a Kobo device.' : (info.agent.includes('Kindle') ? 'a Kindle device.' : 'a device.')))
+    messages.push('Upload successful! ' + (processedFiles.length > 1 ? processedFiles.length + ' files were sent' : (processedFiles[0].conversion ? 'Ebook was converted with ' + processedFiles[0].conversion + ' and sent' : 'Sent'))+' to '+(device === 'Kobo' ? 'a Kobo device.' : (device === 'Kindle' ? 'a Kindle device.' : 'a device.')))
     processedFiles.forEach((file) => {
       messages.push('Filename: ' + file.name)
     })
