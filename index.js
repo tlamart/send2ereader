@@ -454,8 +454,15 @@ async function generateKey (ctx, options = {}) {
   const currentInfo = ctx.keys.get(key)
   if (currentInfo) {
     if (options.key === secretKey && currentInfo.agent && currentInfo.agent !== agent && (currentInfo.files || []).length > 0) {
-      ctx.response.status = 409
-      ctx.body = 'Secret receiver is already connected'
+      currentInfo.expireDelay = options.expireDelay || expireDelay
+      currentInfo.maxExpireDuration = options.maxExpireDuration || maxExpireDuration
+      expireKey(key)
+      clearTimeout(currentInfo.maxTimer)
+      currentInfo.maxTimer = setTimeout(() => {
+        if(ctx.keys.get(key) === currentInfo) removeKey(key)
+      }, currentInfo.maxExpireDuration * 1000)
+      ctx.cookies.set('key', key, {overwrite: true, httpOnly: false, sameSite: 'strict', maxAge: currentInfo.expireDelay * 1000})
+      ctx.body = key
       return
     }
     currentInfo.agent = agent
@@ -544,7 +551,7 @@ async function downloadFile (ctx, next, options = {}) {
     await next()
     return
   }
-  if (info.agent !== ctx.get('user-agent')) {
+  if (!options.allowDifferentAgent && info.agent !== ctx.get('user-agent')) {
     console.error("User Agent doesnt match: " + info.agent + " VS " + ctx.get('user-agent'))
     return
   }
@@ -1024,10 +1031,6 @@ if (secretReceiveRoute) {
       ctx.body = {error: 'No secret receiver'}
       return
     }
-    if (info.agent !== ctx.get('user-agent')) {
-      console.error("User Agent doesnt match: " + info.agent + " VS " + ctx.get('user-agent'))
-      return
-    }
     expireKey(secretKey)
     ctx.body = {
       alive: info.alive,
@@ -1062,7 +1065,8 @@ if (secretReceiveRoute) {
 
   router.get(secretReceiveRoute + '/:filename', async (ctx, next) => {
     await downloadFile(ctx, next, {
-      key: secretKey
+      key: secretKey,
+      allowDifferentAgent: true
     })
   })
 }
