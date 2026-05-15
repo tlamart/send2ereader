@@ -69,14 +69,15 @@ function downloadedStorageKey () {
 function loadDownloadedFiles () {
 	downloadedFiles = {}
 	try {
-		var stored = window.sessionStorage.getItem(downloadedStorageKey())
+		var storageKey = downloadedStorageKey()
+		var stored = window.localStorage.getItem(storageKey) || window.sessionStorage.getItem(storageKey)
 		if (stored) downloadedFiles = JSON.parse(stored)
 	} catch (err) {}
 }
 
 function saveDownloadedFiles () {
 	try {
-		window.sessionStorage.setItem(downloadedStorageKey(), JSON.stringify(downloadedFiles))
+		window.localStorage.setItem(downloadedStorageKey(), JSON.stringify(downloadedFiles))
 	} catch (err) {}
 }
 
